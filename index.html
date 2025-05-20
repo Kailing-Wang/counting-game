@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <title>心平氣和 數秒器</title>
+    <style>
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background: #f0f4f8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 50px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        #game-box {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        button {
+            font-size: 18px;
+            margin: 10px;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            background-color: #0078d4;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #999;
+            cursor: not-allowed;
+        }
+
+        #result {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #444;
+        }
+
+        #targetTime {
+            font-size: 28px;
+            font-weight: bold;
+            color: #cc3300;
+            margin-bottom: 15px;
+            transition: transform 0.3s ease;
+        }
+
+        #leaderboard-box {
+            margin-top: 40px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        #leaderboard-box h2 {
+            margin-bottom: 10px;
+        }
+
+        #leaderboard {
+            list-style: none;
+            padding: 0;
+        }
+
+        #leaderboard li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>心平氣和 數秒器</h1>
+    <div id="game-box">
+        <div id="targetTime"></div>
+        <p id="status">準備開始遊戲！</p>
+        <button id="startBtn" onclick="startChallenge()">開始</button>
+        <button id="stopBtn" onclick="stopChallenge()" disabled>停止</button>
+        <div id="result"></div>
+    </div>
+
+    <div id="leaderboard-box">
+        <h2>排行榜（誤差最小）</h2>
+        <ul id="leaderboard"></ul>
+    </div>
+
+    <script>
+        const stages = [
+            { name: "暖身訓練（共兩次）", count: 2, min: 5, max: 10 },
+            { name: "正式挑戰（共一次）", count: 1, min: 15, max: 20 }
+        ];
+
+        let currentStage = 0;
+        let currentTrial = 0;
+        let targetSeconds = 0;
+        let startTime = 0;
+        let isRunning = false;
+        let stageErrors = [];
+
+        function getRandomSeconds(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function startChallenge() {
+            const stage = stages[currentStage];
+            targetSeconds = getRandomSeconds(stage.min, stage.max);
+
+            // 重置畫面
+            document.getElementById("targetTime").textContent = `這題請數 ${targetSeconds} 秒`;
+            document.getElementById("result").textContent = "";
+            document.getElementById("startBtn").disabled = true;
+            document.getElementById("stopBtn").disabled = true;
+            document.getElementById("status").textContent = `${stage.name} - 第 ${currentTrial + 1} 次`;
+
+            // 顯示目標秒數後倒數
+            setTimeout(() => {
+                let count = 3;
+                const countdown = setInterval(() => {
+                    if (count > 0) {
+                        document.getElementById("targetTime").textContent = count;
+                    } else if (count === 0) {
+                        document.getElementById("targetTime").textContent = "開始！";
+                        startTime = Date.now();
+                        isRunning = true;
+                        document.getElementById("stopBtn").disabled = false;
+                        document.getElementById("status").textContent = `開始計時～按「停止」結束`;
+                    }
+                    count--;
+                }, 1000);
+            }, 1000);
+        }
+
+        function stopChallenge() {
+            if (!isRunning) return;
+
+            const elapsed = (Date.now() - startTime) / 1000;
+            const error = Math.abs(elapsed - targetSeconds);
+            const stageName = stages[currentStage].name;
+
+            document.getElementById("result").innerHTML =
+                `你數了 ${elapsed.toFixed(2)} 秒<br>目標是 ${targetSeconds} 秒<br>誤差：${error.toFixed(2)} 秒`;
+
+            stageErrors.push(error);
+            isRunning = false;
+            currentTrial++;
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("stopBtn").disabled = true;
+
+            if (currentTrial >= stages[currentStage].count) {
+                const avgError = stageErrors.reduce((a, b) => a + b, 0) / stageErrors.length;
+                setTimeout(() => {
+                    alert(`${stageName} 完成！總誤差：${avgError.toFixed(2)} 秒`);
+
+                    // 所有關卡結束
+                    if (currentStage === stages.length - 1) {
+                        const finalAvg = avgError;
+                        const name = prompt("遊戲完成！您真是時間掌控大師😊請輸入名字上排行榜：");
+                        if (name) saveToLeaderboard(name, finalAvg);
+                        document.getElementById("status").textContent = "恭喜完成挑戰";
+                        document.getElementById("startBtn").disabled = true;
+                    } else {
+                        // 進入下一關
+                        currentStage++;
+                        currentTrial = 0;
+                        stageErrors = [];
+                        document.getElementById("status").textContent = `${stages[currentStage].name} 即將開始！`;
+                        document.getElementById("result").textContent = "";
+                    }
+                }, 1000);
+            }
+        }
+
+        function saveToLeaderboard(name, averageError) {
+            const key = 'leaderboard';
+            let list = JSON.parse(localStorage.getItem(key) || '[]');
+            list.push({ name, averageError });
+            list.sort((a, b) => a.averageError - b.averageError);
+            list = list.slice(0, 10);
+            localStorage.setItem(key, JSON.stringify(list));
+            renderLeaderboard();
+        }
+
+        function renderLeaderboard() {
+            const listEl = document.getElementById('leaderboard');
+            const list = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+            listEl.innerHTML = list.length ? '' : '<li>尚無紀錄</li>';
+            list.forEach((e, i) => {
+                const li = document.createElement('li');
+                li.textContent = `${i + 1}. ${e.name} - 誤差 ${e.averageError.toFixed(2)} 秒`;
+                listEl.appendChild(li);
+            });
+        }
+
+        // 初次載入顯示
+        document.addEventListener('DOMContentLoaded', renderLeaderboard);
+    </script>
+</body>
+
+</html>
+
+<!-- 
+## ⏱️ 心平氣和 數秒器
+
+這是一個簡單的讀秒挑戰遊戲，玩家需要在心中默數，挑戰自己的時間感知能力！
+
+## 🎮 遊戲規則
+
+1. 按下「開始」按鈕後，畫面將顯示此次的目標讀秒數。
+2. 三秒的倒數準備，當你覺得時間到了，就按下「停止」按鈕。
+3. 程式會告訴你實際經過的秒數，並計算誤差。
+
+## 🎯 關卡設計
+
+暖身訓練  2 次
+正式挑戰  1 次
+
+- 遊戲將依序進行兩次暖身與一次正式挑戰
+- 誤差成績最接近者會記錄在排行榜中！歡迎挑戰～ -->
